@@ -9,14 +9,16 @@ const PENSANDO: u8 = 0;
 const COM_FOME: u8 = 1;
 const COMENDO: u8 = 2;
 
-struct DiningPhilosophers {
+struct Mesa {
+    estado: Mutex<[u8; QTD_FILOSOFOS]>,
     hashis: Mutex<[bool; QTD_FILOSOFOS]>,
     cv: [Condvar; QTD_FILOSOFOS],
 }
 
-impl DiningPhilosophers {
+impl Mesa {
     fn new() -> Self {
-        DiningPhilosophers {
+        Mesa {
+            estado: Mutex::new([PENSANDO; QTD_FILOSOFOS]),
             hashis: Mutex::new([true; QTD_FILOSOFOS]),
             cv: [
                 Condvar::new(),
@@ -28,50 +30,73 @@ impl DiningPhilosophers {
         }
     }
 
-    fn comer(&self, id: usize, estado: &mut [u8; QTD_FILOSOFOS]) {
-        println!("Filósofo {} com fome", id + 1);
-        estado[id] = COM_FOME;
-
+    fn pegar_hashis(&self, id: usize) {
+        let mut hashis = self.hashis.lock().unwrap();
+    
+        let left = id;
+        let right = (id + 1) % QTD_FILOSOFOS;
+    
+        while !hashis[left] || !hashis[right] {
+            if !hashis[left] {
+                hashis = self.cv[left].wait(hashis).unwrap();
+            } else {
+                hashis = self.cv[right].wait(hashis).unwrap();
+            }
+        }
+    
+        hashis[left] = false;
+        hashis[right] = false;
+    }
+    
+    fn devolver_hashis(&self, id: usize) {
         let mut hashis = self.hashis.lock().unwrap();
 
         let left = id;
         let right = (id + 1) % QTD_FILOSOFOS;
 
-        while !hashis[left] || !hashis[right] {
-            hashis = self.cv[id].wait(hashis).unwrap();
-        }
-
-        hashis[left] = false;
-        hashis[right] = false;
-        estado[id] = COMENDO;
-        drop(hashis);
-
-        println!("Filósofo {} comendo", id + 1);
-        thread::sleep(Duration::from_secs(1 + rand::random::<u64>() % 5));
-
-        hashis = self.hashis.lock().unwrap();
         hashis[left] = true;
         hashis[right] = true;
-        drop(hashis);
-
-        self.cv[left].notify_one();
-        self.cv[right].notify_one();
+    }
+    
+    fn comer(&self, id: usize) {
+        
+        let mut estado = self.estado.lock().unwrap();
+        estado[id] = COM_FOME;
+        println!("Filósofo {} com fome", id + 1);
+        drop(estado);
+    
+        self.pegar_hashis(id); 
+    
+        let mut estado = self.estado.lock().unwrap();
+        estado[id] = COMENDO;
+        println!("Filósofo {} comendo", id + 1);
+        drop(estado);
+    
+        thread::sleep(Duration::from_secs(1 + rand::random::<u64>() % 5));
+    
+        self.devolver_hashis(id);
+    
+        let mut estado = self.estado.lock().unwrap();
+        estado[id] = PENSANDO;
+        println!("Filósofo {} pensando", id + 1);
+        drop(estado);
+    
+        self.cv[id].notify_one(); 
+        self.cv[(id + 1) % QTD_FILOSOFOS].notify_one();
     }
 }
 
 fn main() {
-    let dining_philosophers = Arc::new(DiningPhilosophers::new());
-    let mut states = [0; QTD_FILOSOFOS];
+    let mesa = Arc::new(Mesa::new());
 
     let philosophers: Vec<_> = (0..QTD_FILOSOFOS)
         .map(|i| {
-            let dining_philosophers = dining_philosophers.clone();
+            let mesa = mesa.clone();
             thread::spawn(move || {
+                println!("Filósofo {} pensando", i + 1);
                 loop {
-                    println!("Filósofo {} pensando", i + 1);
-                    states[i] = PENSANDO;
                     thread::sleep(Duration::from_secs(1 + rand::random::<u64>() % 5));
-                    dining_philosophers.comer(i, &mut states);
+                    mesa.comer(i);
                 }
             })
         }).collect();
