@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn pig_latin(string: &mut String) {
-    let vowels = ['a', 'A', 'e', 'E', 'i', 'I', 'o', 'O', 'u', 'U'];
+    let vowels = ['a', 'e', 'i', 'o', 'u'];
     let first_char = string.trim().chars().next().unwrap();
     for vowel in vowels {
         if first_char == vowel {
