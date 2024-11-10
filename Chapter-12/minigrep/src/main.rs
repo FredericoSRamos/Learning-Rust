@@ -3,9 +3,9 @@ use std::{env, process};
 extern crate minigrep;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let mut args = env::args().into_iter();
 
-    let config = minigrep::Config::new(args).unwrap_or_else(|error| {
+    let config = minigrep::Config::new(&mut args).unwrap_or_else(|error| {
         eprintln!("An error occurred while parsing the arguments: {error}");
         process::exit(1);
     });

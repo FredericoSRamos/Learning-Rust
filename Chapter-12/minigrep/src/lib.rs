@@ -7,50 +7,45 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(vec: Vec<String>) -> Result<Self, &'static str> {
-        if vec.len() < 3 {
-            return Err("Not enough arguments");
-        }
+    pub fn new(iter: &mut env::Args) -> Result<Self, &'static str> {
+        iter.next();
 
-        let query = vec[1].clone();
-        let filename = vec[2].clone();
-        let mut case_sensitive = env::var("CASE_INSENSITIVE").is_err();
+        let query = match iter.next() {
+            Some(value) => value,
+            None => return Err("Not enough parameters")
+        };
 
-        if vec.len() > 3 {
-            case_sensitive = match vec[3].parse() {
-                Ok(value) => value,
-                Err(_) => return Err("Incorrect usage of CASE_INSENSITIVE argument (either true of false)")
-            };
-        }
+        let filename = match iter.next() {
+            Some(value) => value,
+            None => return Err("Not enough parameters")
+        };
 
-        return Ok(Config {query, filename, case_sensitive});
+        let case_sensitive = match iter.next() {
+            Some(value) => {
+                match value.parse() {
+                    Ok(result) => result,
+                    Err(_) => {
+                        return Err("Incorrect usage of CASE_INSENSITIVE argument (either true or false)")
+                    }
+                }
+            }
+            None => env::var("CASE_INSENSITIVE").is_err()
+        };
+
+        return Ok(Config {
+            query,
+            filename,
+            case_sensitive
+        });
     }
 }
 
 pub fn search<'a> (query: &str, contents: &'a str) -> Vec<&'a str> {
-    let mut vec = Vec::new();
-
-    for line in contents.lines() {
-        if line.contains(&query) {
-            vec.push(line);
-        }
-    }
-
-    return vec;
+    return contents.lines().filter(|line| line.contains(query)).collect();
 }
 
 pub fn search_case_insensitive<'a> (query: &str, contents: &'a str) -> Vec<&'a str> {
-    let query = query.to_lowercase();
-
-    let mut vec = Vec::new();
-
-    for line in contents.lines() {
-        if line.to_lowercase().contains(&query) {
-            vec.push(line);
-        }
-    }
-
-    return vec;
+    return contents.lines().filter(|line| line.to_lowercase().contains(&query.to_lowercase())).collect();
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
@@ -80,15 +75,15 @@ pub mod tests {
     pub fn case_sensitive() {
         let query = "to";
         let content = "\
-                            I’m Nobody! Who are you?
-                            Are you Nobody too?
-                            Then there’s a pair of us!
-                            Don't tell! they'd advertise you know!
+I’m Nobody! Who are you?
+Are you Nobody too?
+Then there’s a pair of us!
+Don't tell! they'd advertise you know!
 
-                            How dreary to be Somebody!
-                            How public like a Frog
-                            To tell one’s name the livelong June
-                            To an admiring Bog!";
+How dreary to be Somebody!
+How public like a Frog
+To tell one’s name the livelong June
+To an admiring Bog!";
 
         let vec = search(query, content);
 
@@ -101,15 +96,15 @@ pub mod tests {
     pub fn case_insensitive() {
         let query = "to";
         let content = "\
-                            I’m Nobody! Who are you?
-                            Are you Nobody too?
-                            Then there’s a pair of us!
-                            Don't tell! they'd advertise you know!
+I’m Nobody! Who are you?
+Are you Nobody too?
+Then there’s a pair of us!
+Don't tell! they'd advertise you know!
 
-                            How dreary to be Somebody!
-                            How public like a Frog
-                            To tell one’s name the livelong June
-                            To an admiring Bog!";
+How dreary to be Somebody!
+How public like a Frog
+To tell one’s name the livelong June
+To an admiring Bog!";
 
         let vec = search_case_insensitive(query, content);
 
